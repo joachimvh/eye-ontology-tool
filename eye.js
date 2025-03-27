@@ -2,7 +2,14 @@ const fs = require('node:fs');
 const path = require('node:path');
 const querystring = require('node:querystring');
 
-const SERVER_URL = 'https://eye.restdesc.org/'
+const SERVER_URL = 'https://eye.restdesc.org/';
+const RULE_DIR = path.join(__dirname, 'rules');
+
+// Parse all files in the rules dir
+async function getRules() {
+  const dir = await fs.promises.readdir(RULE_DIR);
+  return Promise.all(dir.map(file => fs.promises.readFile(path.join(RULE_DIR, file), { encoding: 'utf8' })));
+}
 
 // Combine input data with fixed rules and send POST request to EYE server
 async function handleRequest(query, data) {
@@ -24,7 +31,8 @@ const args = process.argv.slice(2);
 Promise.all(args.map(file => fs.promises.readFile(file, { encoding: 'utf8' })))
   .then(async files => {
     const [query, ...documents] = files;
-    const result = await handleRequest(query, documents);
+    const rules = await getRules();
+    const result = await handleRequest(query, [ ...documents, ...rules ]);
     if (result.trim().length === 0) {
       console.error('No results');
     } else {

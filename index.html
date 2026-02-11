@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>eye-js Reasoning Playground</title>
+  <script src="https://eyereasoner.github.io/eye-js/latest/index.js"></script>
+  <style>
+      body {
+          font-family: Arial, sans-serif;
+          max-width: 1100px;
+          margin: 40px auto;
+          line-height: 1.5;
+      }
+
+      .editor-container {
+          display: flex;
+          gap: 20px;
+      }
+
+      .editor-column {
+          flex: 1;
+          display: flex;
+          flex-direction: column;
+      }
+
+      textarea {
+          width: 100%;
+          font-family: monospace;
+          resize: vertical;
+      }
+
+      #output {
+          background: #f5f5f5;
+      }
+
+      button {
+          margin-right: 10px;
+          margin-bottom: 10px;
+          padding: 6px 10px;
+      }
+
+      #fileList div {
+          display: flex;
+          align-items: center;
+          margin-bottom: 4px;
+      }
+
+      .remove {
+          cursor: pointer;
+          margin-left: 10px;
+      }
+
+      .remove:hover {
+          opacity: 0.7;
+      }
+
+      .query-buttons {
+          height: 40px; /* match visual height of buttons */
+          display: flex;
+          align-items: center;
+      }
+
+      .query-buttons-spacer {
+          height: 40px; /* same height as .query-buttons */
+      }
+  </style>
+</head>
+<body>
+
+  <h1>Ontology Reasoning</h1>
+
+  <p>
+    Add your ontology and test data using the upload button below.
+    Make sure to also add the necessary rules so the reasoner gains knowledge about
+    <a href="https://eyereasoner.github.io/eye/reasoning/rpo/">RDFS and OWL constructs</a>.
+  </p>
+  <p>
+    Press the execute button to reason over the provided resources.
+    The "Pictures" query returns a list of all pictures with the names of the depicted people.
+    The "All results" query returns all deductions the reasoner can make.
+  </p>
+
+  <div class="editor-container">
+    <div class="editor-column">
+      <h2>Query</h2>
+      <div class="query-buttons">
+        <button onclick="setPictures()">Pictures</button>
+        <button onclick="setAllResults()">All results</button>
+      </div>
+      <textarea id="queryArea"></textarea>
+    </div>
+
+    <div class="editor-column">
+      <h2>Output</h2>
+      <div class="query-buttons-spacer"></div>
+      <textarea id="output" readonly></textarea>
+    </div>
+  </div>
+
+  <h2>Execute</h2>
+  <button onclick="runReasoner()">Run Reasoner</button>
+
+  <h2>Upload Data Files</h2>
+  <input type="file" id="fileInput" multiple />
+  <div id="fileList"></div>
+
+  <script>
+    const defaultPicturesQuery = `@prefix ex: <http://example.com/>.
+@prefix foaf: <http://xmlns.com/foaf/0.1/>.
+
+{
+  ?picture a foaf:Image;
+    foaf:depicts ?person.
+  ?person a foaf:Person;
+      foaf:name ?name.
+} => {
+  (
+    ?picture
+    ?name
+  ) a ex:Result.
+}.`;
+
+    const allResultsQuery = `{
+  ?s ?p ?o.
+} => {
+  ?s ?p ?o.
+}.`;
+
+    const queryArea = document.getElementById("queryArea");
+    const fileInput = document.getElementById("fileInput");
+    const fileList = document.getElementById("fileList");
+    const outputArea = document.getElementById("output");
+
+    let uploadedFiles = [];
+
+    function autoResizeTextarea(textarea) {
+      textarea.style.height = "auto";
+      textarea.style.height = textarea.scrollHeight + "px";
+    }
+
+    function setPictures() {
+      queryArea.value = defaultPicturesQuery;
+    }
+
+    function setAllResults() {
+      queryArea.value = allResultsQuery;
+    }
+
+    // Initialize default query and size
+    queryArea.value = defaultPicturesQuery;
+    autoResizeTextarea(queryArea);
+    outputArea.style.height = queryArea.style.height;
+
+    fileInput.addEventListener("change", async (event) => {
+      const files = Array.from(event.target.files);
+
+      for (const file of files) {
+        const text = await file.text();
+        uploadedFiles.push({
+          name: file.name,
+          content: text
+        });
+      }
+
+      renderFileList();
+      fileInput.value = "";
+    });
+
+    function renderFileList() {
+      fileList.innerHTML = "";
+
+      uploadedFiles.forEach((file, index) => {
+        const div = document.createElement("div");
+
+        const nameSpan = document.createElement("span");
+        nameSpan.textContent = file.name;
+
+        const removeBtn = document.createElement("span");
+        removeBtn.textContent = "❌";
+        removeBtn.className = "remove";
+        removeBtn.onclick = () => {
+          uploadedFiles.splice(index, 1);
+          renderFileList();
+        };
+
+        div.appendChild(nameSpan);
+        div.appendChild(removeBtn);
+        fileList.appendChild(div);
+      });
+    }
+
+    async function runReasoner() {
+      outputArea.value = "Running...";
+      try {
+        const combinedData = uploadedFiles.map(f => f.content).join("\n");
+        const query = queryArea.value;
+
+        const result = await eyereasoner.n3reasoner(combinedData, query);
+
+        if (result.trim().length === 0) {
+          outputArea.value = "No results";
+        } else {
+          outputArea.value = result;
+        }
+
+      } catch (err) {
+        outputArea.value = "Error:\n" + err.message;
+      }
+    }
+  </script>
+
+</body>
+</html>
